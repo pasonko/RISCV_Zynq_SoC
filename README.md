@@ -18,6 +18,7 @@ Unlike traditional simulation-only projects, this design features a robust **Har
 ---
 
 ## ⚙️ Hardware Microarchitecture
+![hardware_arch](https://github.com/user-attachments/assets/d6ebf702-29b2-41cf-b9e0-04e68b6c6e28)
 
 The design adopts a **Single-Cycle RISC-V RV32I** architecture, meaning every instruction (Fetch, Decode, Execute, Memory, Writeback) completes within a single clock cycle. The datapath is divided into five key modules:
 
