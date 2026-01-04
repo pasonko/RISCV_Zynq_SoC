@@ -1,0 +1,32 @@
+# Test 3: Multiplication by repeated addition (3 * 4 = 12)
+# Concept: Unrolled loop (Hardcoded 4 adds)
+
+# Init
+00000093  # addi x1, x0, 0    -> x1 = 0 (Accumulator)
+00300113  # addi x2, x0, 3    -> x2 = 3 (Multiplicand)
+00400193  # addi x3, x0, 4    -> x3 = 4 (Counter, optional for unrolled)
+
+# Loop 1
+002080B3  # add x1, x1, x2    -> x1 = 0 + 3 = 3
+FFF18193  # addi x3, x3, -1   -> x3 = 3
+
+# Loop 2
+002080B3  # add x1, x1, x2    -> x1 = 3 + 3 = 6
+FFF18193  # addi x3, x3, -1   -> x3 = 2
+
+# Loop 3
+002080B3  # add x1, x1, x2    -> x1 = 6 + 3 = 9
+FFF18193  # addi x3, x3, -1   -> x3 = 1
+
+# Loop 4
+002080B3  # add x1, x1, x2    -> x1 = 9 + 3 = 12
+# (Last decrement omitted as it doesn't affect result)
+
+# Construct Address 0x2000 (Data Memory Base)
+40000213  # addi x4, x0, 1024 -> x4 = 0x400
+00420233  # add x4, x4, x4    -> x4 = 0x800
+00420233  # add x4, x4, x4    -> x4 = 0x1000
+00420233  # add x4, x4, x4    -> x4 = 0x2000
+
+# Store Result (12) to 0x2000
+00122023  # sw x1, 0(x4)
