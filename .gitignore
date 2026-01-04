@@ -1,0 +1,14 @@
+# Vivado junk files
+*.log
+*.jou
+*.str
+.Xil/
+*.pb
+*.dcp
+
+# Vitis/SDK binaries
+Debug/
+Release/
+*.elf
+*.o
+*.bit

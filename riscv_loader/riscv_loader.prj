@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="ASCII"?>
+<sdkproject:SdkProject xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:sdkproject="http://www.xilinx.com/sdkproject" name="riscv_loader" location="C:/Users/pason/vitis_workspace/riscv_loader" platform="C:/Users/pason/vitis_workspace/system_wrapper/export/system_wrapper/system_wrapper.xpfm" platformUID="xilinx:cora-z7-07s::0.0(custom)" systemProject="riscv_loader_system" sysConfig="system_wrapper" runtime="cpp" cpu="standalone_ps7_cortexa9_0" cpuInstance="ps7_cortexa9_0" os="standalone" mssSignature="35bf771e1c6686a465cd83e0fdc3c3c5">
+  <configuration name="Debug" id="xilinx.gnu.armv7.exe.debug.1018406343">
+    <configBuildOptions xsi:type="sdkproject:SdkOptions"/>
+    <lastBuildOptions xsi:type="sdkproject:SdkOptions"/>
+  </configuration>
+  <configuration name="Release" id="xilinx.gnu.armv7.exe.release.2042949358" dirty="true">
+    <configBuildOptions xsi:type="sdkproject:SdkOptions"/>
+  </configuration>
+  <template appTemplateName="hello_world"/>
+</sdkproject:SdkProject>
