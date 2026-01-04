@@ -1,144 +1,159 @@
-這是一份為你的專案量身打造的 **專業級 README.md**。
-
-這份文件不僅僅是說明書，它是你的**技術行銷文件**。它強調了你如何解決 **硬體時序 (Timing)**、**軟硬整合 (Co-design)** 以及 **自動化驗證 (Automation)** 的難題。
-
-請將以下內容複製到你的 `README.md` 檔案中：
-
----
-
 # RISC-V Single-Cycle SoC on Zynq-7000 with Automated HIL Verification
 
-這是一個基於 **RISC-V RV32I 指令集** 的單週期 (Single-Cycle) 處理器 SoC 專案，實作於 **Xilinx Zynq-7000 FPGA (Cora Z7S)** 平台上。
+## 📖 Project Overview
 
-本專案不僅包含硬體設計，更整合了 **Python 自動化測試套件** 與 **C 語言韌體**，建構了一套完整的 **HIL (Hardware-in-the-Loop)** 硬體迴路驗證系統，解決了傳統 FPGA 開發中測試繁瑣與觀察不易的問題。
+This project implements a **Single-Cycle RISC-V Processor (RV32I)** integrated into a **Xilinx Zynq-7000 SoC**.
 
----
-
-## 🌟 Key Features (核心功能)
-
-* **RISC-V Core Design:**
-* 實作 RV32I 基礎指令集 (Arithmetic, Logic, Memory, Branch/Jump)。
-* 自定義 **AXI4-Lite Slave Interface**，讓 RISC-V 核心能作為 IP 掛載於 Zynq PS 端。
-
-
-* **System Integration (SoC):**
-* **PS-PL Co-design:** 利用 Zynq PS (Cortex-A9) 作為控制器，透過 AXI Bus 控制 PL 端的 RISC-V 核心。
-* **Stable IO Protocol:** 在 C 韌體層解決了高頻寫入下的訊號遺漏問題 (Ghost Instruction Issue)，確保指令寫入的時序穩定性。
-
-
-* **Automated Verification Suite:**
-* 開發 Python 自動化腳本，支援 **批量測試 (Batch Testing)**。
-* 支援 Hex 檔案動態載入，無需重新燒錄 Bitstream 即可更換測試程式。
-* 包含完整的測試案例庫 (Add, Sub, Branch, Fibonacci, Multiplication)。
-
-
+Unlike traditional simulation-only projects, this design features a robust **Hardware-in-the-Loop (HIL)** verification framework. By coordinating Python automation scripts with the Zynq Processing System (PS), the system enables dynamic instruction loading, execution, and result verification on the FPGA logic, solving the complexity of verifying custom processor IPs.
 
 ---
 
-## 🏗️ System Architecture (系統架構)
+## 🏗️ System Architecture
 
-系統資料流如下：
-`PC (Python Script) <--> UART <--> Zynq PS (C Firmware) <--> AXI4-Lite <--> RISC-V IP (PL)`
+**Data Flow:** `PC (Python) <--> UART <--> Zynq PS (Cortex-A9) <--> AXI4-Lite <--> RISC-V Core (PL)`
 
-1. **PC 端 (Host):** Python 腳本解析 Hex 機器碼，透過 UART 發送指令與控制訊號。
-2. **PS 端 (Controller):** 運行於 Cortex-A9 的 C 程式接收 UART 封包，並透過 `Xil_Out32` 驅動 AXI GPIO，產生精確的 **Write Enable** 脈衝。
-3. **PL 端 (Target):** RISC-V Core 接收指令並寫入 Instruction Memory，執行後將結果存回 Data Memory。
-4. **驗證:** Python 讀回 Data Memory 的值，並與黃金模型 (Golden Reference) 進行自動比對。
+* **Processing System (PS):** Acts as the bridge and controller. It receives packets via UART and drives the AXI4-Lite Master interface to control the PL.
+* **Programmable Logic (PL):** Contains the custom RISC-V Core, wrapped with an AXI4-Lite Slave interface for register-level control.
 
 ---
 
-## 📂 Repository Structure (檔案結構)
+## ⚙️ Hardware Microarchitecture
 
-```text
-RISCV_Zynq_SoC/
-├── hw/                     # 硬體設計 (Hardware Source)
-│   ├── src/
-│   │   ├── ALU_Decoder.v   # 已修復 SUB 指令解碼錯誤 (Bug Fix)
-│   │   ├── system_wrapper.v
-│   │   └── ... (其他 Verilog 模組)
-│   ├── bd/                 # Block Design Tcl 腳本
-│   └── system_wrapper.xsa  # 硬體描述檔 (Hardware Handoff)
-│
-├── sw/                     # 嵌入式軟體 (Embedded Software)
-│   └── src/
-│       ├── helloworld.c    # UART Monitor Firmware (含時序控制邏輯)
-│       └── lscript.ld      # Linker Script
-│
-└── tests/                  # 自動化驗證套件 (Automation Suite)
-    ├── test_riscv.py       # Python 主測試腳本
-    └── test_suite/         # 測試案例庫
-        ├── hex/            # RISC-V 機器碼 (.hex)
-        └── expected/       # 預期結果 (.ans)
+The design adopts a **Single-Cycle RISC-V RV32I** architecture, meaning every instruction (Fetch, Decode, Execute, Memory, Writeback) completes within a single clock cycle. The datapath is divided into five key modules:
 
-```
+### 1. Instruction Fetch (IF)
+
+* **PC Logic:** The Program Counter (PC) uses a **2-to-1 Multiplexer** to determine the next address.
+* **Normal Flow:** Executes `PC + 4` by default using a dedicated adder.
+* **Branch Flow:** When the branch condition is met (`Zero` Flag Asserted) and the instruction is a Branch, the PC switches to `PCTarget` (calculated by `PC + ImmExt`).
+
+
+* **Instruction Memory:** Receives the PC address and outputs the 32-bit instruction code (`Instr`) to the decoder within the same cycle.
+
+### 2. Decode & Register Read (ID)
+
+* **Register File (RF):** Implemented with a **Dual Read Port** and **Single Write Port** architecture.
+* `A1 (rs1)` and `A2 (rs2)` are driven directly by instruction fields to asynchronously read `RD1` and `RD2`.
+* Writes occur on the **Positive Edge** of the clock, targeting the register specified by `A3 (rd)`.
+
+
+* **Sign Extension Unit:** Expands the Immediate value from various instruction formats (I-Type, S-Type, B-Type) into a 32-bit signed integer (`ImmExt`) for ALU calculations or branch offsets.
+
+### 3. Execution & ALU (EX)
+
+* **ALU Muxing Logic:**
+* **SrcA:** Comes directly from `RD1` of the Register File.
+* **SrcB:** Selected via a 2-to-1 Mux; source can be `RD2` (R-Type) or `ImmExt` (I-Type/S-Type).
+
+
+* **ALU Operation:** The Arithmetic Logic Unit handles addition, subtraction, logical operations (AND/OR), and comparisons (SLT). It generates the critical `Zero` signal used by the Control Unit for branch decisions.
+
+### 4. Memory Access (MEM)
+
+* **Data Memory:** Implements a synchronous write architecture.
+* **Address:** Driven directly by the ALU calculation result (`ALUResult`).
+* **Write Data:** Driven by `RD2` from the Register File (e.g., `sw` instruction).
+* **Read Data:** Outputs data based on the address (e.g., `lw` instruction).
+
+
+
+### 5. Write Back (WB)
+
+* **Result Selection:** A critical **Result Mux** is placed at the end of the datapath.
+* For arithmetic instructions (ADD/SUB/AND...), it selects `ALUResult`.
+* For load instructions (LW), it selects `ReadData` to write back to the register file.
+
+
+
+### 🧠 Control Unit Design
+
+To drive the datapath, the Control Unit is designed as pure combinational logic, split into two levels:
+
+1. **Main Decoder:** Parses the 7-bit `Opcode` to generate primary control signals:
+* `RegWrite`: Enables register file write.
+* `ALUSrc`: Selects the second ALU operand (Register vs. Immediate).
+* `MemWrite`: Enables Data Memory write.
+* `ResultSrc`: Determines write-back source (ALU vs. Memory).
+* `Branch`: Flags the current instruction as a branch.
+
+
+2. **ALU Decoder:** Combines the Main Decoder's `ALUOp` signal with the instruction's `Funct3` and `Funct7` fields to generate specific ALU Control codes (e.g., ADD, SUB, AND, OR, SLT).
 
 ---
 
-## 🚀 Getting Started (如何執行)
+## 🐛 Design Challenges & Engineering Solutions
 
-### 1. Hardware Setup (Vivado)
+During the SoC integration and verification phase, several critical engineering challenges were encountered and resolved. Below is the **Root Cause Analysis** and solution for each:
 
-1. 開啟 Vivado，載入專案或利用 Source 檔案重建專案。
-2. 確認 Block Design 包含 Zynq Processing System 與自定義 RISC-V IP。
-3. Generate Bitstream 並 Export Hardware (`.xsa`)。
+### 1. Control Signal Aliasing in ALU Decoder
 
-### 2. Firmware Setup (Vitis)
+* **The Issue:** During verification, the ALU incorrectly outputted `ADD` results when executing `SUB` (subtraction) instructions.
+* **Root Cause Analysis:** According to the RISC-V RV32I standard, `ADD` and `SUB` share the same `Opcode` (0110011) and `Funct3` (000). The only difference lies in the 5th bit of `Funct7` (0 for ADD, 1 for SUB). The initial decoder logic used simplified conditions, ignoring `Funct7`, causing **Decoding Aliasing** where `SUB` was misinterpreted as the default `ADD`.
+* **Resolution:** Refactored the `ALU_Decoder` module using behavioral `case` statements. Added mandatory bit-wise checks for `op[5]` and `funct7[5]` to ensure **decoding uniqueness** for R-Type operations.
 
-1. 在 Vitis 中建立 Platform Project (基於 `.xsa`)。
-2. 建立 Application Project (`riscv_automation_monitor`)。
-3. 將 `sw/src/helloworld.c` 與 `lscript.ld` 複製到專案的 `src` 資料夾中。
-4. Build Project 並執行 **Run As -> Launch Hardware** (燒錄 FPGA 並執行 C 程式)。
+### 2. Immediate Field Scrambling & Sign Extension
 
-### 3. Run Verification (Python)
+* **The Issue:** `BEQ` (Branch if Equal) tests failed because the PC jumped to incorrect memory addresses.
+* **Root Cause Analysis:** To keep register ports fixed, RISC-V B-Type instructions perform **Bit Scrambling** on the Immediate value (e.g., Bit 11 is at instr[7], Bit 12 at instr[31]). The initial design treated the lower bits as a raw immediate without handling this scrambling or performing correct **Sign Extension** to 32-bits.
+* **Resolution:** Implemented dedicated Muxing Logic in the `Sign_Extend` module. For B-Type instructions, the bits are manually concatenated according to ISA spec: `{32{instr[31]}, instr[7], instr[30:25], instr[11:8], 1'b0}`, resolving negative offset calculation errors.
 
-確保 FPGA 已啟動且 UART 訊號線已連接電腦。
+### 3. Signal Integrity & Write Pulse Width Violation
 
-```bash
-# 安裝相依套件
-pip install pyserial
+* **The Issue:** "Ghost Instructions" appeared during system tests, where new instructions failed to write to Instruction Memory, causing the CPU to execute old, residual code.
+* **Root Cause Analysis:** A **Timing Violation** occurred due to the speed difference between the Zynq PS (650MHz) and PL logic. When the C firmware toggled GPIOs to simulate AXI writes, the `WE` (Write Enable) **Pulse Width** was shorter than the Block RAM's **Setup Time** requirement, causing the latch to fail.
+* **Resolution:**
+* **Firmware Constraint:** Implemented timing control in the C firmware by introducing `usleep(1)` between `WE` Assert and De-assert states to widen the signal pulse.
+* **Verification Safety:** Introduced a **Memory Sanitization** mechanism in the Python automation script, overwriting memory with `NOP` instructions before every load to ensure a clean test environment.
 
-# 進入測試資料夾
-cd tests
 
-# 執行自動化測試
-python test_riscv.py
-
-```
 
 ---
 
-## 📊 Test Cases & Results (測試成果)
+## 🧪 Automated Verification Suite
 
-本專案通過了以下關鍵迴歸測試 (Regression Tests)：
+The project includes a Python-based verification framework located in `tests/`.
+
+### Workflow
+
+1. **Discovery:** Scans `tests/test_suite/hex/*.hex` for test cases.
+2. **Sanitization:** Clears Instruction Memory (writes NOPs) to prevent ghost instructions.
+3. **Loading:** Transmits machine code via UART to FPGA.
+4. **Execution:** Releases Reset; CPU executes logic.
+5. **Verification:** Reads Data Memory (0x2000) and compares against `.ans` golden references.
+
+### Supported Tests
 
 | Test Case | Description | Focus Area | Status |
 | --- | --- | --- | --- |
-| **01_add** | Basic Addition | ALU ADD operation, Register Write | ✅ PASS |
-| **02_sub** | Subtraction | ALU SUB decoding (Fixed Bug), R-Type Logic | ✅ PASS |
-| **03_branch** | Branch if Equal | BEQ Logic, PC Control, Zero Flag | ✅ PASS |
-| **04_fibonacci** | Fibonacci Sequence | RAW Dependency, Loop Logic | ✅ PASS |
-| **05_mult** | Software Multiplication | Complex algorithm, Memory Store | ✅ PASS |
-
-**執行截圖：**
-
-```text
-[1/5] Running test: 01_add_test
-  [PASS] Result: 30 ✓
-
-[2/5] Running test: 02_sub_test
-  [PASS] Result: 35 ✓
-...
-Result: ALL TESTS PASSED! ✓✓✓
-
-```
+| **01_add** | Basic Addition | ALU ADD, Reg Write | ✅ PASS |
+| **02_sub** | Subtraction | ALU Decoder Fix | ✅ PASS |
+| **03_branch** | Branch if Equal | PC Logic, Zero Flag | ✅ PASS |
+| **04_fibonacci** | Fibonacci Seq | Dependency, Loop | ✅ PASS |
+| **05_mult** | Multiplication | Algorithm, Memory Store | ✅ PASS |
 
 ---
 
-## 🛠️ Future Work (未來展望)
+## 📂 Repository Structure
 
-* **Pipelining:** 將單週期架構升級為五級管線 (5-Stage Pipeline)，並處理 Data/Control Hazard。
-* **DMA Integration:** 引入 AXI DMA 以加速大數據量的指令載入 (Instruction Loading)。
-* **Compliance Testing:** 執行官方 RISC-V Architectural Compliance Test Suite。
+```text
+RISCV_Zynq_SoC/
+├── hw/                     # Hardware Design
+│   ├── src/
+│   │   ├── ALU_Decoder.v   # [Critical] Fixed decoding logic
+│   │   ├── Sign_Extend.v   # [Critical] Handles Immediate Scrambling
+│   │   └── ...
+│   └── system_wrapper.xsa  # Hardware Export
+│
+├── sw/                     # Embedded Firmware
+│   └── src/
+│       ├── helloworld.c    # [Critical] UART Monitor with Timing Control
+│       └── lscript.ld      # Linker Script
+│
+└── tests/                  # Verification Suite
+    ├── test_riscv.py       # Automation Script
+    └── test_suite/         # Test vectors (Hex & Expected Answer)
+
+```
 
 ---
 
@@ -146,9 +161,9 @@ Result: ALL TESTS PASSED! ✓✓✓
 
 **Pei-Sheng Ke**
 
-* Master of Science in Electrical & Computer Engineering, Ohio State University
-* Focus: Digital IC Design, FPGA Verification, Computer Architecture
+* Master of Science in Electrical & Computer Engineering, The Ohio State University
+* **Focus:** Digital IC Design, FPGA Verification, Computer Architecture
 
 ---
 
-*Last Updated: Jan 2026*
+*Verified on Windows 11 / Vivado 2024.1 / Cora Z7S Board*
